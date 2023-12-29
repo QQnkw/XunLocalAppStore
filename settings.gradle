@@ -18,3 +18,4 @@ dependencyResolutionManagement {
 }
 rootProject.name = "XunLocalAppStore"
 include ':app'
+include ':compile_config'

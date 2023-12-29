@@ -2,8 +2,10 @@ package com.xiaoxun.appstorelocal;
 
 import androidx.appcompat.app.AppCompatActivity;
 
+import android.content.Intent;
 import android.os.Bundle;
 
+import com.xiaoxun.appstorelocal.synchronize_data.DownloadService;
 import com.xiaoxun.appstorelocal.ui.main.MainFragment;
 
 public class MainActivity extends AppCompatActivity {
@@ -17,5 +19,12 @@ public class MainActivity extends AppCompatActivity {
                     .replace(R.id.container, MainFragment.newInstance())
                     .commitNow();
         }
+        startService(new Intent(this, DownloadService.class));
+    }
+
+    @Override
+    protected void onDestroy() {
+        super.onDestroy();
+        stopService(new Intent(this, DownloadService.class));
     }
 }
