@@ -25,20 +25,7 @@ public class BroadcastManager {
                 switch (action) {
                     case LOGIN_OK_ACTION:
                     case SESSION_OK_ACTION:
-                        // TODO: 2023/12/29 1.拉取服务器的信息2.和本地数据库比较3.同步本地应用到既不在服务器也不在本地应用的4.对服务器应用信息进行分析:卸载,安装等
-                        NetRepository.getInstance().queryAllAppInfo(new IResponseDataCallBack.Stub() {
-                            @Override
-                            public void onSuccess(ResponseData responseData) throws RemoteException {
-                                if (responseData != null) {
-                                    LogUtils.d(responseData.getResponseData());
-                                }
-                            }
-
-                            @Override
-                            public void onError(int i, String s) throws RemoteException {
-
-                            }
-                        });
+                        SynchronizeDataManager.getInstance().synchronizeData();
                         break;
                 }
             } catch (Exception e) {

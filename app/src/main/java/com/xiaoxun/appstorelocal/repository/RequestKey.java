@@ -8,4 +8,5 @@ public interface RequestKey {
     String INT_SN = "SN";
     String STRING_SID = "SID";
     String BEAN_PL = "PL";
+    String STRING_GID = "GID";
 }
