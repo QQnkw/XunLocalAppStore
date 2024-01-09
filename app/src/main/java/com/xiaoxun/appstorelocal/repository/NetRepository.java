@@ -91,7 +91,7 @@ public class NetRepository {
                     }
                 });
             }
-        });
+        }).retry(3);
     }
 
     @WorkerThread
@@ -125,10 +125,10 @@ public class NetRepository {
                     }
                 });
             }
-        });
+        }).retry(3);
     }
 
-    public Observable<Boolean> uploadInstallAppSource(AppReasonBean appReasonBean) {
+    /*public Observable<Boolean> uploadInstallAppSource(AppReasonBean appReasonBean) {
         return Observable.create(new ObservableOnSubscribe<Boolean>() {
             @Override
             public void subscribe(@NonNull ObservableEmitter<Boolean> emitter) throws Throwable {
@@ -145,7 +145,7 @@ public class NetRepository {
                 emitter.onComplete();
             }
         });
-    }
+    }*/
 
     public Observable<Boolean> uploadInstallAppReason(AppReasonBean appReasonBean) {
         return Observable.create(new ObservableOnSubscribe<Boolean>() {
@@ -175,6 +175,6 @@ public class NetRepository {
                         }
                 );
             }
-        });
+        }).retry(3);
     }
 }

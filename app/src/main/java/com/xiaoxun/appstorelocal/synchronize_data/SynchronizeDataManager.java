@@ -44,6 +44,7 @@ import io.reactivex.rxjava3.functions.BiFunction;
 import io.reactivex.rxjava3.functions.Consumer;
 import io.reactivex.rxjava3.functions.Function;
 import io.reactivex.rxjava3.functions.Function3;
+import io.reactivex.rxjava3.functions.Predicate;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class SynchronizeDataManager {
@@ -68,22 +69,49 @@ public class SynchronizeDataManager {
      *
      */
     public void synchronizeData() {
-        // TODO: 2024/1/2 1.上传安装成功或失败的信息2.上传本地未被管理的应用3.同步服务信息到本地
-        // TODO: 2023/12/29 1.拉取服务器的信息2.和本地数据库比较3.同步本地应用到既不在服务器也不在本地应用的4.对服务器应用信息进行分析:卸载,安装等
+        // TODO: 2024/1/2 1.上传安装成功或失败的信息2.上传本地未被管理的应用3.同步服务信息到本地4.对服务器应用信息进行分析:卸载,安装等
         String json = SPUtils.getInstance().getString(SP_KEY_UPLOAD_FAIL_APP);
         List<AppReasonBean> appReasonBeanList = GsonUtils.fromJson(json, new TypeToken<List<AppReasonBean>>() {
         }.getType());
-        Observable observable = null;
+        Observable<Boolean> observable = null;
         if (CollectionUtils.isEmpty(appReasonBeanList)) {
-            //没有上传失败的应用
+            //没有上报失败的应用
+            observable = Observable.just(true);
         } else {
-            //先上传失败的应用
+            //先上包失败的应用
             observable = uploadAppInstallState(appReasonBeanList);
         }
-        if (observable == null) {
+        observable.flatMap(new Function<Boolean, ObservableSource<List<AppInfo>>>() {
+            @Override
+            public ObservableSource<List<AppInfo>> apply(Boolean aBoolean) throws Throwable {
+                return queryInstalledThirdAppListFromSystem();
+            }
+        }).flatMap(new Function<List<AppInfo>, ObservableSource<AppInfo>>() {
+            @Override
+            public ObservableSource<AppInfo> apply(List<AppInfo> appInfos) throws Throwable {
+                List<AppInfo> dbList = App.sAppDatabase.appInfoDao().queryAll();
+                ArrayList<AppInfo> needManageAppList = new ArrayList<AppInfo>();
+                boolean isExit;
+                for (AppInfo appInfo : appInfos) {
+                    isExit = false;
+                    for (AppInfo info : dbList) {
+                        if (appInfo.app_id.equals(info.app_id)) {
+                            isExit = true;
+                            break;
+                        }
+                    }
+                    if (!isExit) {
+                        needManageAppList.add(appInfo);
+                    }
+                }
+
+                return Observable.fromIterable(appInfos);
+            }
+        });
+        /*if (observable == null) {
             observable = queryInstalledThirdAppListFromSystem();
         } else {
-            observable.flatMap(new Function<Boolean, ObservableSource<Boolean>>() {
+            observable = observable.flatMap(new Function<Boolean, ObservableSource<Boolean>>() {
                 @Override
                 public ObservableSource<Boolean> apply(Boolean aBoolean) throws Throwable {
                     Observable.zip(queryInstalledThirdAppListFromSystem()
@@ -96,28 +124,33 @@ public class SynchronizeDataManager {
                     return Observable.just(true);
                 }
             });
-        }
+        }*/
     }
 
     private Observable<Boolean> uploadAppInstallState(List<AppReasonBean> appReasonBeanList) {
         List<Observable<Boolean>> observableList = new ArrayList<>();
         for (AppReasonBean appReasonBean : appReasonBeanList) {
             Observable<Boolean> uploadAppOptypeObservable = NetRepository.getInstance().uploadAppOptype(appReasonBean);
-            Observable<Boolean> uploadInstallAppSourceObservable = NetRepository.getInstance().uploadInstallAppSource(appReasonBean);
             Observable<Boolean> uploadInstallAppReasonObservable = NetRepository.getInstance().uploadInstallAppReason(appReasonBean);
-            Observable zipObservable = Observable.zip(uploadAppOptypeObservable, uploadInstallAppSourceObservable, uploadInstallAppReasonObservable, new Function3<Boolean, Boolean, Boolean, Boolean>() {
+            Observable<Boolean> observable = uploadAppOptypeObservable.flatMap(new Function<Boolean, ObservableSource<Boolean>>() {
                 @Override
-                public Boolean apply(Boolean aBoolean, Boolean aBoolean2, Boolean aBoolean3) throws Throwable {
-                    return aBoolean && aBoolean2 && aBoolean3;
+                public ObservableSource<Boolean> apply(Boolean aBoolean) throws Throwable {
+                    return uploadInstallAppReasonObservable;
                 }
             });
-            observableList.add(zipObservable);
+            observableList.add(observable);
         }
         return Observable.zip(observableList, new Function<Object[], Boolean>() {
             @Override
             public Boolean apply(Object[] objects) throws Throwable {
-                String string = Arrays.toString(objects);
-                LogUtils.d(string);
+                for (Object object : objects) {
+                    if (object instanceof Boolean) {
+                        Boolean result = (Boolean) object;
+                        if (!result) {
+                            throw new Exception("上报的信息有异常");
+                        }
+                    }
+                }
                 return true;
             }
         });
