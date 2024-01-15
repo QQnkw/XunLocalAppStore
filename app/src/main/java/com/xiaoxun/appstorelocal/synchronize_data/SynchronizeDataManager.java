@@ -28,6 +28,7 @@ import com.xiaoxun.sdk.XiaoXunNetworkManager;
 import java.util.ArrayList;
 import java.util.Arrays;
 import java.util.HashMap;
+import java.util.Iterator;
 import java.util.List;
 
 import io.reactivex.rxjava3.android.schedulers.AndroidSchedulers;
@@ -40,11 +41,13 @@ import io.reactivex.rxjava3.core.Observer;
 import io.reactivex.rxjava3.core.Scheduler;
 import io.reactivex.rxjava3.core.SingleObserver;
 import io.reactivex.rxjava3.disposables.Disposable;
+import io.reactivex.rxjava3.functions.BiConsumer;
 import io.reactivex.rxjava3.functions.BiFunction;
 import io.reactivex.rxjava3.functions.Consumer;
 import io.reactivex.rxjava3.functions.Function;
 import io.reactivex.rxjava3.functions.Function3;
 import io.reactivex.rxjava3.functions.Predicate;
+import io.reactivex.rxjava3.functions.Supplier;
 import io.reactivex.rxjava3.schedulers.Schedulers;
 
 public class SynchronizeDataManager {
@@ -71,6 +74,7 @@ public class SynchronizeDataManager {
     public void synchronizeData() {
         // TODO: 2024/1/2 1.上传安装成功或失败的信息2.上传本地未被管理的应用3.同步服务信息到本地4.对服务器应用信息进行分析:卸载,安装等
         String json = SPUtils.getInstance().getString(SP_KEY_UPLOAD_FAIL_APP);
+        LogUtils.d("上报失败的数据:" + json);
         List<AppReasonBean> appReasonBeanList = GsonUtils.fromJson(json, new TypeToken<List<AppReasonBean>>() {
         }.getType());
         Observable<Boolean> observable = null;
@@ -128,30 +132,46 @@ public class SynchronizeDataManager {
     }
 
     private Observable<Boolean> uploadAppInstallState(List<AppReasonBean> appReasonBeanList) {
-        List<Observable<Boolean>> observableList = new ArrayList<>();
+        List<Observable<Object[]>> observableList = new ArrayList<>();
         for (AppReasonBean appReasonBean : appReasonBeanList) {
-            Observable<Boolean> uploadAppOptypeObservable = NetRepository.getInstance().uploadAppOptype(appReasonBean);
-            Observable<Boolean> uploadInstallAppReasonObservable = NetRepository.getInstance().uploadInstallAppReason(appReasonBean);
-            Observable<Boolean> observable = uploadAppOptypeObservable.flatMap(new Function<Boolean, ObservableSource<Boolean>>() {
+            Observable<Object[]> uploadAppOptypeObservable = NetRepository.getInstance().uploadAppOptype(appReasonBean);
+            Observable<Object[]> uploadInstallAppReasonObservable = NetRepository.getInstance().uploadInstallAppReason(appReasonBean);
+            Observable<Object[]> observable = uploadAppOptypeObservable.flatMap(new Function<Object[], ObservableSource<Object[]>>() {
                 @Override
-                public ObservableSource<Boolean> apply(Boolean aBoolean) throws Throwable {
-                    return uploadInstallAppReasonObservable;
+                public ObservableSource<Object[]> apply(Object[] objectArr) throws Throwable {
+                    boolean result = (boolean) objectArr[1];
+                    if (result) {
+                        return uploadInstallAppReasonObservable;
+                    } else {
+                        return Observable.just(objectArr);
+                    }
                 }
             });
             observableList.add(observable);
         }
-        return Observable.zip(observableList, new Function<Object[], Boolean>() {
+        Observable.concat(observableList).collect(new Supplier<Boolean>() {
             @Override
-            public Boolean apply(Object[] objects) throws Throwable {
-                for (Object object : objects) {
-                    if (object instanceof Boolean) {
-                        Boolean result = (Boolean) object;
-                        if (!result) {
-                            throw new Exception("上报的信息有异常");
+            public Boolean get() throws Throwable {
+                return true;
+            }
+        }, new BiConsumer<Boolean, Object[]>() {
+            @Override
+            public void accept(Boolean b, Object[] objectArr) throws Throwable {
+                String app_id = (String) objectArr[0];
+                boolean result = (boolean) objectArr[1];
+                if (result) {
+                    //上报成功删除缓存
+                    String json = SPUtils.getInstance().getString(SP_KEY_UPLOAD_FAIL_APP);
+                    List<AppReasonBean> appReasonBeanList = GsonUtils.fromJson(json, new TypeToken<List<AppReasonBean>>() {
+                    }.getType());
+                    for (AppReasonBean appReasonBean : appReasonBeanList) {
+                        if (appReasonBean.app_id.equals(app_id)) {
+                            appReasonBeanList.remove(appReasonBean);
+                            break;
                         }
                     }
+                    SPUtils.getInstance().put(SP_KEY_UPLOAD_FAIL_APP, GsonUtils.toJson(appReasonBeanList));
                 }
-                return true;
             }
         });
     }

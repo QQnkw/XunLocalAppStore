@@ -21,6 +21,7 @@ import com.xiaoxun.statistics.XiaoXunStatisticsManager;
 import org.json.JSONObject;
 
 import java.util.List;
+import java.util.Map;
 
 import io.reactivex.rxjava3.annotations.NonNull;
 import io.reactivex.rxjava3.core.Observable;
@@ -91,17 +92,19 @@ public class NetRepository {
                     }
                 });
             }
-        }).retry(3);
+        });
     }
 
     @WorkerThread
-    public Observable<Boolean> uploadAppOptype(AppReasonBean appReasonBean) {
-        return Observable.create(new ObservableOnSubscribe<Boolean>() {
+    public Observable<Object[]> uploadAppOptype(AppReasonBean appReasonBean) {
+        return Observable.create(new ObservableOnSubscribe<Object[]>() {
             @Override
-            public void subscribe(@NonNull ObservableEmitter<Boolean> emitter) throws Throwable {
+            public void subscribe(@NonNull ObservableEmitter<Object[]> emitter) throws Throwable {
                 XiaoXunNetworkManager xiaoXunNetworkManager = App.sApp.getXiaoXunNetworkManager();
                 if (xiaoXunNetworkManager == null) {
-                    emitter.onError(new Exception("小寻服务为空"));
+                    LogUtils.e("uploadAppOptype:小寻服务为空");
+                    emitter.onNext(new Object[]{appReasonBean.app_id,false});
+                    emitter.onComplete();
                     return;
                 }
                 AppInfo appInfo = App.sAppDatabase.appInfoDao().query(appReasonBean.app_id);
@@ -115,17 +118,20 @@ public class NetRepository {
                 xiaoXunNetworkManager.sendJsonMessage(jsonObject.toString(), new IResponseDataCallBack.Stub() {
                     @Override
                     public void onSuccess(ResponseData responseData) throws RemoteException {
-                        emitter.onNext(true);
+                        LogUtils.d("uploadAppOptype:onSuccess");
+                        emitter.onNext(new Object[]{appReasonBean.app_id,true});
                         emitter.onComplete();
                     }
 
                     @Override
                     public void onError(int i, String s) throws RemoteException {
-                        emitter.onError(new Exception(s));
+                        LogUtils.e("uploadAppOptype:onError");
+                        emitter.onNext(new Object[]{appReasonBean.app_id,false});
+                        emitter.onComplete();
                     }
                 });
             }
-        }).retry(3);
+        });
     }
 
     /*public Observable<Boolean> uploadInstallAppSource(AppReasonBean appReasonBean) {
@@ -147,13 +153,15 @@ public class NetRepository {
         });
     }*/
 
-    public Observable<Boolean> uploadInstallAppReason(AppReasonBean appReasonBean) {
-        return Observable.create(new ObservableOnSubscribe<Boolean>() {
+    public Observable<Object[]> uploadInstallAppReason(AppReasonBean appReasonBean) {
+        return Observable.create(new ObservableOnSubscribe<Object[]>() {
             @Override
-            public void subscribe(@NonNull ObservableEmitter<Boolean> emitter) throws Throwable {
+            public void subscribe(@NonNull ObservableEmitter<Object[]> emitter) throws Throwable {
                 XiaoXunNetworkManager xiaoXunNetworkManager = App.sApp.getXiaoXunNetworkManager();
                 if (xiaoXunNetworkManager == null) {
-                    emitter.onError(new Exception("小寻服务为空"));
+                    LogUtils.e("uploadInstallAppReason:小寻服务为空");
+                    emitter.onNext(new Object[]{appReasonBean.app_id,false});
+                    emitter.onComplete();
                     return;
                 }
                 xiaoXunNetworkManager.uploadNotice(
@@ -164,17 +172,20 @@ public class NetRepository {
                         new IResponseDataCallBack.Stub() {
                             @Override
                             public void onSuccess(ResponseData responseData) throws RemoteException {
-                                emitter.onNext(true);
+                                LogUtils.d("uploadInstallAppReason:onSuccess");
+                                emitter.onNext(new Object[]{appReasonBean.app_id,true});
                                 emitter.onComplete();
                             }
 
                             @Override
                             public void onError(int i, String s) throws RemoteException {
-                                emitter.onError(new Exception(s));
+                                LogUtils.e("uploadInstallAppReason:onError");
+                                emitter.onNext(new Object[]{appReasonBean.app_id,false});
+                                emitter.onComplete();
                             }
                         }
                 );
             }
-        }).retry(3);
+        });
     }
 }
