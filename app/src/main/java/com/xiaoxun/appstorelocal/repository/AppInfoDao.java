@@ -1,5 +1,6 @@
 package com.xiaoxun.appstorelocal.repository;
 
+import androidx.room.Dao;
 import androidx.room.Delete;
 import androidx.room.Insert;
 import androidx.room.Query;
@@ -13,6 +14,7 @@ import io.reactivex.rxjava3.core.Completable;
 import io.reactivex.rxjava3.core.Flowable;
 import io.reactivex.rxjava3.core.Single;
 
+@Dao
 public interface AppInfoDao {
 
     @Insert
@@ -44,6 +46,9 @@ public interface AppInfoDao {
 
     @Query("SELECT * FROM AppInfo WHERE app_id = :app_id")
     AppInfo query(String app_id);
+
+    @Query("DELETE FROM AppInfo")
+    void emptyTable();
 
     /**
      * 通过distinctUntilChanged() 运算符，可以确保仅在实际查询结果发生更改时通知界面。

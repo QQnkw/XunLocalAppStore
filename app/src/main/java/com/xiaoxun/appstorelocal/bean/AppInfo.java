@@ -6,7 +6,6 @@ import androidx.room.Fts4;
 import androidx.room.Ignore;
 import androidx.room.PrimaryKey;
 
-@Fts4
 @Entity
 public class AppInfo {
     /**
@@ -30,7 +29,6 @@ public class AppInfo {
      * app_id : com.xxun.watch.studywords
      */
     @PrimaryKey(autoGenerate = true)
-    @ColumnInfo(name = "rowid")
     public int id;
     public String icon;//应用图标字段
     public int optype;//数据库字段  0:add  1:modify  2:delete
