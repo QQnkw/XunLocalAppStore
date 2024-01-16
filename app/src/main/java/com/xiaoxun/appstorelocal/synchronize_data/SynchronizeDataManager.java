@@ -114,61 +114,65 @@ public class SynchronizeDataManager {
             observable = uploadAppInstallState(appReasonBeanList).toObservable();
         }
         observable.flatMap(new Function<Boolean, ObservableSource<List<AppInfo>>>() {
-            @Override
-            public ObservableSource<List<AppInfo>> apply(Boolean aBoolean) throws Throwable {
-                return NetRepository.getInstance().queryAllAppInfoFromNet().retry(3);
-            }
-        }).zipWith(queryInstalledThirdAppListFromSystem(), new BiFunction<List<AppInfo>, List<AppInfo>, List<AppInfo>>() {
-            @Override
-            public List<AppInfo> apply(List<AppInfo> appInfoNetList, List<AppInfo> appInfoLocalList) throws Throwable {
-                App.sAppDatabase.appInfoDao().emptyTable();
-                ArrayList<AppInfo> noControlAppList = new ArrayList<>();
-                for (AppInfo appInfoLocal : appInfoLocalList) {
-                    boolean has = false;
-                    for (AppInfo appInfoNet : appInfoNetList) {
-                        if (appInfoLocal.app_id.equals(appInfoNet.app_id)) {
-                            has = true;
-                            break;
+                    @Override
+                    public ObservableSource<List<AppInfo>> apply(Boolean aBoolean) throws Throwable {
+                        return NetRepository.getInstance().queryAllAppInfoFromNet();
+                    }
+                }).zipWith(queryInstalledThirdAppListFromSystem(), new BiFunction<List<AppInfo>, List<AppInfo>, List<AppInfo>>() {
+                    @Override
+                    public List<AppInfo> apply(List<AppInfo> appInfoNetList, List<AppInfo> appInfoLocalList) throws Throwable {
+                        App.sAppDatabase.appInfoDao().emptyTable();
+                        ArrayList<AppInfo> noControlAppList = new ArrayList<>();
+                        for (AppInfo appInfoLocal : appInfoLocalList) {
+                            boolean has = false;
+                            for (AppInfo appInfoNet : appInfoNetList) {
+                                if (appInfoLocal.app_id.equals(appInfoNet.app_id)) {
+                                    has = true;
+                                    break;
+                                }
+                            }
+                            if (!has) {
+                                noControlAppList.add(appInfoLocal);
+                            }
                         }
+                        ArrayList<AppInfo> insertDBAppInfoList = new ArrayList<>(appInfoNetList);
+                        if (!noControlAppList.isEmpty()) {
+                            insertDBAppInfoList.addAll(noControlAppList);
+                        }
+                        App.sAppDatabase.appInfoDao().insert(insertDBAppInfoList);
+                        return noControlAppList;
                     }
-                    if (!has) {
-                        noControlAppList.add(appInfoLocal);
+                }).flatMap(new Function<List<AppInfo>, ObservableSource<Boolean>>() {
+                    @Override
+                    public ObservableSource<Boolean> apply(List<AppInfo> appInfos) throws Throwable {
+                        ArrayList<AppReasonBean> list = new ArrayList<>();
+                        for (AppInfo appInfo : appInfos) {
+                            AppReasonBean appReasonBean = new AppReasonBean();
+                            appReasonBean.app_id = appInfo.app_id;
+                            appReasonBean.name = appInfo.name;
+                            appReasonBean.reason = "未通过下载安装的应用";
+                            appReasonBean.actionType = "install";
+                            appReasonBean.optype = 0;
+                            appReasonBean.installSourceDevice = "未知来源";
+                            appReasonBean.installSourceAppId = "未知来源";
+                            appReasonBean.installAppNetType = "未知来源";
+                            list.add(appReasonBean);
+                        }
+                        String json = SPUtils.getInstance().getString(SP_KEY_UPLOAD_FAIL_APP);
+                        LogUtils.d("未添加管控前未上报数据:" + json);
+                        List<AppReasonBean> appReasonBeanList = GsonUtils.fromJson(json, new TypeToken<List<AppReasonBean>>() {
+                        }.getType());
+                        if (appReasonBeanList == null) {
+                            appReasonBeanList = new ArrayList<>(list);
+                        } else {
+                            appReasonBeanList.addAll(list);
+                        }
+                        String toJson = GsonUtils.toJson(appReasonBeanList);
+                        LogUtils.d("添加管控后未上报数据:" + toJson);
+                        SPUtils.getInstance().put(SP_KEY_UPLOAD_FAIL_APP, toJson);
+                        return uploadAppInstallState(list).toObservable();
                     }
-                }
-                ArrayList<AppInfo> insertDBAppInfoList = new ArrayList<>(appInfoNetList);
-                if (!noControlAppList.isEmpty()) {
-                    insertDBAppInfoList.addAll(noControlAppList);
-                }
-                App.sAppDatabase.appInfoDao().insert(insertDBAppInfoList);
-                return noControlAppList;
-            }
-        }).flatMap(new Function<List<AppInfo>, ObservableSource<Boolean>>() {
-            @Override
-            public ObservableSource<Boolean> apply(List<AppInfo> appInfos) throws Throwable {
-                ArrayList<AppReasonBean> list = new ArrayList<>();
-                for (AppInfo appInfo : appInfos) {
-                    AppReasonBean appReasonBean = new AppReasonBean();
-                    appReasonBean.app_id = appInfo.app_id;
-                    appReasonBean.name = appInfo.name;
-                    appReasonBean.reason = "未通过下载安装的应用";
-                    appReasonBean.actionType = "install";
-                    appReasonBean.optype = 0;
-                    appReasonBean.installSourceDevice = "未知来源";
-                    appReasonBean.installSourceAppId = "未知来源";
-                    appReasonBean.installAppNetType = "未知来源";
-                    list.add(appReasonBean);
-                }
-                String json = SPUtils.getInstance().getString(SP_KEY_UPLOAD_FAIL_APP);
-                LogUtils.d("未添加管控前未上报数据:" + json);
-                List<AppReasonBean> appReasonBeanList = GsonUtils.fromJson(json, new TypeToken<List<AppReasonBean>>() {
-                }.getType());
-                appReasonBeanList.addAll(list);
-                String toJson = GsonUtils.toJson(appReasonBeanList);
-                LogUtils.d("添加管控后未上报数据:" + toJson);
-                SPUtils.getInstance().put(SP_KEY_UPLOAD_FAIL_APP, toJson);
-                return uploadAppInstallState(list).toObservable();
-            }
-        }).subscribeOn(Schedulers.io())
+                }).subscribeOn(Schedulers.io())
                 .subscribe();
     }
 
@@ -210,20 +214,22 @@ public class SynchronizeDataManager {
                 LogUtils.d("上报前数据:" + json);
                 List<AppReasonBean> appReasonBeanList = GsonUtils.fromJson(json, new TypeToken<List<AppReasonBean>>() {
                 }.getType());
-                ListIterator<AppReasonBean> listIterator = appReasonBeanList.listIterator();
-                while (listIterator.hasNext()) {
-                    AppReasonBean appReasonBean = listIterator.next();
-                    for (Object[] object : objects) {
-                        String app_id = (String) object[0];
-                        if (appReasonBean.app_id.equals(app_id)) {
-                            listIterator.remove();
-                            break;
+                if (appReasonBeanList != null) {
+                    ListIterator<AppReasonBean> listIterator = appReasonBeanList.listIterator();
+                    while (listIterator.hasNext()) {
+                        AppReasonBean appReasonBean = listIterator.next();
+                        for (Object[] object : objects) {
+                            String app_id = (String) object[0];
+                            if (appReasonBean.app_id.equals(app_id)) {
+                                listIterator.remove();
+                                break;
+                            }
                         }
                     }
+                    String toJson = GsonUtils.toJson(appReasonBeanList);
+                    LogUtils.d("上报后数据:" + toJson);
+                    SPUtils.getInstance().put(SP_KEY_UPLOAD_FAIL_APP, toJson);
                 }
-                String toJson = GsonUtils.toJson(appReasonBeanList);
-                LogUtils.d("上报后数据:" + toJson);
-                SPUtils.getInstance().put(SP_KEY_UPLOAD_FAIL_APP, toJson);
                 return true;
             }
         });

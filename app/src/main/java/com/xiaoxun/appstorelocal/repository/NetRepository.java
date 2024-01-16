@@ -13,6 +13,7 @@ import com.google.gson.reflect.TypeToken;
 import com.xiaoxun.appstorelocal.App;
 import com.xiaoxun.appstorelocal.bean.AppInfo;
 import com.xiaoxun.appstorelocal.bean.AppReasonBean;
+import com.xiaoxun.appstorelocal.bean.QuestAllAppInfoResponse;
 import com.xiaoxun.sdk.IResponseDataCallBack;
 import com.xiaoxun.sdk.ResponseData;
 import com.xiaoxun.sdk.XiaoXunNetworkManager;
@@ -70,18 +71,15 @@ public class NetRepository {
                 xiaoXunNetworkManager.sendJsonMessage(outer.toString(), new IResponseDataCallBack.Stub() {
                     @Override
                     public void onSuccess(ResponseData responseData) throws RemoteException {
-                        if (responseData == null) {
-                            emitter.onError(new Exception("返回数据为空"));
-                            return;
-                        }
                         String responseDataTxt = responseData.getResponseData();
                         LogUtils.d("从服务器拉取应用信息:\n" + responseDataTxt);
                         if (TextUtils.isEmpty(responseDataTxt)) {
                             emitter.onError(new Exception("返回数据为空"));
                             return;
                         }
-                        List<AppInfo> netList = GsonUtils.fromJson(responseDataTxt, new TypeToken<List<AppInfo>>() {
+                        QuestAllAppInfoResponse questAllAppInfoResponse = GsonUtils.fromJson(responseDataTxt, new TypeToken<QuestAllAppInfoResponse>() {
                         }.getType());
+                        List<AppInfo> netList = questAllAppInfoResponse.getPL().getList();
                         emitter.onNext(netList);
                         emitter.onComplete();
                     }
